@@ -51,4 +51,7 @@ class _YarooAppImpl implements Application {
     ..useSpanner(_spanner)
     ..onError(onException)
     ..viewEngine = _viewEngine;
+
+  @override
+  T instanceOf<T extends Object>() => instanceFromRegistry<T>();
 }

@@ -24,7 +24,7 @@ abstract class Entity<PkType, Model> {
 
   DateTime? updatedAt;
 
-  Query<Model> get _query {
+  Query<Model> get query {
     final connName = connection;
     final query = DB.query<Model>(tableName);
     return connName == null ? query : query.driver(DB.driver(connName));
@@ -33,15 +33,15 @@ abstract class Entity<PkType, Model> {
   WhereClause _whereId(Query _) => _.whereEqual(primaryKey, id);
 
   @nonVirtual
-  Future<void> delete() => _query.delete(_whereId).exec();
+  Future<void> delete() => query.delete(_whereId).exec();
 
   @nonVirtual
-  Future<Model> save() async => await _query.insert(this);
+  Future<Model> save() async => await query.insert(this);
 
   @nonVirtual
   Future<Model?> update(Map<String, dynamic> values) async {
-    await _query.update(where: _whereId, values: values).exec();
-    return _query.get();
+    await query.update(where: _whereId, values: values).exec();
+    return query.get();
   }
 
   bool get enableTimestamps => false;
