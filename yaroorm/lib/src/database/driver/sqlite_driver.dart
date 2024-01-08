@@ -6,9 +6,7 @@ import 'package:yaroorm/migration.dart';
 
 import '../../primitives/serializer.dart';
 import '../../primitives/where.dart';
-import '../../query/query.dart';
-import '../entity.dart';
-import 'driver.dart';
+import 'package:yaroorm/yaroorm.dart';
 
 final _serializer = const SqliteSerializer();
 
@@ -393,7 +391,9 @@ class SqliteTableBlueprint extends TableBlueprint {
   }
 
   @override
-  void id({name = 'id', String type = 'INTEGER', autoIncrement = true}) {
+  void id({name = 'id', String? type, autoIncrement = true}) {
+    type ??= 'INTEGER';
+
     final sb = StringBuffer()..write('${escapeName(name)} $type NOT NULL PRIMARY KEY');
     if (autoIncrement) sb.write(' AUTOINCREMENT');
     statements.add(sb.toString());
@@ -462,7 +462,7 @@ class SqliteTableBlueprint extends TableBlueprint {
 
   @override
   void binary(String name,
-      {bool nullable = false, int length = 1, String? defaultValue, String? charset, String? collate}) {
+      {bool nullable = false, int size = 1, String? defaultValue, String? charset, String? collate}) {
     statements.add(_getColumn(name, 'BLOB', nullable: nullable, defaultValue: defaultValue));
   }
 
@@ -538,13 +538,13 @@ class SqliteTableBlueprint extends TableBlueprint {
 
   @override
   void varbinary(String name,
-      {bool nullable = false, int length = 1, String? defaultValue, String? charset, String? collate}) {
+      {bool nullable = false, int size = 1, String? defaultValue, String? charset, String? collate}) {
     binary(name, nullable: nullable, defaultValue: defaultValue);
   }
 
   @override
   void varchar(String name,
-      {bool nullable = false, String? defaultValue, int size = 255, String? charset, String? collate}) {
+      {bool nullable = false, String? defaultValue, int length = 255, String? charset, String? collate}) {
     string(name, nullable: nullable, defaultValue: defaultValue);
   }
 

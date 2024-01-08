@@ -29,6 +29,14 @@ final config = YaroormConfig.from({
       'secure': true,
       ..._baseConfig,
     },
+    'foo_pgsql': {
+      'driver': 'pgsql',
+      'port': 5432,
+      'database': 'postgres',
+      'host': 'localhost',
+      'username': 'postgres',
+      'password': 'postgres',
+    },
   },
   'migrations_table': 'migrations',
   'migrations': [AddUsersTable()]

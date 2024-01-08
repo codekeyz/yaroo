@@ -1,7 +1,10 @@
+import 'package:yaroorm/src/database/driver/mysql_driver.dart';
+import 'package:yaroorm/src/database/driver/pgsql_driver.dart';
+
 import '../../primitives/serializer.dart';
 import '../../query/query.dart';
 import '../../../migration.dart';
-import 'mysql_driver.dart';
+
 import 'sqlite_driver.dart';
 
 enum DatabaseDriverType { sqlite, pgsql, mysql, mariadb }
@@ -101,6 +104,8 @@ abstract interface class DatabaseDriver with DriverContract {
     switch (driver) {
       case DatabaseDriverType.sqlite:
         return SqliteDriver(dbConn);
+      case DatabaseDriverType.pgsql:
+        return PostgreSqlDriver(dbConn);
       case DatabaseDriverType.mariadb:
       case DatabaseDriverType.mysql:
         return MySqlDriver(dbConn, driver);
