@@ -1,27 +1,14 @@
-import 'dart:io';
-
 import 'package:test/test.dart';
 import 'package:yaroorm/yaroorm.dart';
 
+import '../fixtures/migrator.dart';
 import '../fixtures/test_data.dart';
 
-void runIntegrationTest(String connectionName) {
+void runBasicE2ETest(String connectionName) {
   final driver = DB.driver(connectionName);
 
-  Future<void> runMigrator(String command) async {
-    final commands = ['run', 'test/fixtures/migrator.dart', command, '--database=$connectionName'];
-    print('Starting Execution: dart ${commands.join(' ')}');
-
-    final result = await Process.run('dart', commands);
-    stdout.write(result.stdout);
-    stderr.write(result.stderr);
-    expect(result.exitCode, 0);
-  }
-
-  return group('Integration Test with ${driver.type.name} driver', () {
+  return group('with ${driver.type.name} driver', () {
     test('driver should connect', () async {
-      final driver = DB.driver(connectionName);
-
       await driver.connect();
 
       expect(driver.isOpen, isTrue);
@@ -30,18 +17,18 @@ void runIntegrationTest(String connectionName) {
     test('should have no tables', () async {
       final result = await Future.wait([
         driver.hasTable('users'),
-        driver.hasTable('tasks'),
+        driver.hasTable('todos'),
       ]);
 
       expect(result.every((e) => e), isFalse);
     });
 
     test('should execute migration', () async {
-      await runMigrator('migrate');
+      await runMigrator(connectionName, 'migrate');
 
       final result = await Future.wait([
         driver.hasTable('users'),
-        driver.hasTable('tasks'),
+        driver.hasTable('todos'),
       ]);
 
       expect(result.every((e) => e), isTrue);
@@ -98,15 +85,14 @@ void runIntegrationTest(String connectionName) {
       expect(updatedResult.every((e) => e.homeAddress == 'Keta Lagoon'), isTrue);
     });
 
-    test('should fetch only 23 users in Lagos Nigeria', () async {
-      final age50Users = await Query.table<User>()
-          .driver(driver)
-          .whereIn('home_address', ['Lagos, Nigeria'])
-          .orderByDesc('age')
-          .take(23);
+    test('should fetch only users in Ghana', () async {
+      final query = Query.table<User>().driver(driver).whereLike('home_address', '%, Ghana').orderByDesc('age');
+      final usersInGhana = await query.findMany();
+      expect(usersInGhana.length, 6);
+      expect(usersInGhana.every((e) => e.homeAddress.contains('Ghana')), isTrue);
 
-      expect(age50Users.length, 23);
-      expect(age50Users.every((e) => e.homeAddress == 'Lagos, Nigeria'), isTrue);
+      final take4 = await query.take(4);
+      expect(take4.length, 4);
     });
 
     test('should get all users between age 35 and 50', () async {
@@ -124,7 +110,7 @@ void runIntegrationTest(String connectionName) {
           .orderByAsc('home_address')
           .findMany();
 
-      expect(users.length, 33);
+      expect(users.length, 18);
       expect(users.first.homeAddress, 'Abuja, Nigeria');
       expect(users.last.homeAddress, 'Owerri, Nigeria');
     });
@@ -147,7 +133,7 @@ void runIntegrationTest(String connectionName) {
     });
 
     test('should delete many users', () async {
-      final query = Query.table<User>().driver(driver).whereIn('home_address', ['Lagos, Nigeria']);
+      final query = Query.table<User>().driver(driver).whereLike('home_address', '%, Nigeria');
 
       final users = await query.findMany();
       expect(users, isNotEmpty);
@@ -159,12 +145,9 @@ void runIntegrationTest(String connectionName) {
     });
 
     test('should drop tables', () async {
-      await runMigrator('migrate:reset');
+      await runMigrator(connectionName, 'migrate:reset');
 
-      final result = await Future.wait([
-        driver.hasTable('users'),
-        driver.hasTable('tasks'),
-      ]);
+      final result = await Future.wait([driver.hasTable('users'), driver.hasTable('todos')]);
 
       expect(result.every((e) => e), isFalse);
     });

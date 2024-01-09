@@ -14,13 +14,6 @@ const String entityFromJsonStaticFuncName = 'fromJson';
 
 @entity
 abstract class Entity<PkType, Model> {
-  @JsonKey(includeToJson: false, includeFromJson: false)
-  DriverContract _driver = DB.defaultDriver;
-
-  /// override this this set the connection for this model
-  @JsonKey(includeToJson: false, includeFromJson: false)
-  String? get connection => null;
-
   Entity() {
     assert(runtimeType == Model, 'Type Mismatch on Entity<$PkType, $Model>. $runtimeType expected');
     if (PkType == dynamic) {
@@ -36,22 +29,45 @@ abstract class Entity<PkType, Model> {
 
   DateTime? updatedAt;
 
+  Map<String, dynamic> toJson();
+
+  @nonVirtual
+  // ignore: non_constant_identifier_names
+  Map<String, dynamic> get to_db_data {
+    final mapData = toJson();
+    if (mapData[_primaryKey] == null && !allowInsertIdAsNull) mapData.remove(_primaryKey);
+    if (!enableTimestamps) {
+      mapData
+        ..remove(createdAtColumn)
+        ..remove(updatedAtColumn);
+    }
+    return mapData;
+  }
+
+  @JsonKey(includeToJson: false, includeFromJson: false)
+  DriverContract _driver = DB.defaultDriver;
+
+  /// override this this set the connection for this model
+  @JsonKey(includeToJson: false, includeFromJson: false)
+  String? get connection => null;
+
+  String? _primaryKeyCache;
+  String get _primaryKey {
+    if (_primaryKeyCache != null) return _primaryKeyCache!;
+    return _primaryKeyCache = getEntityPrimaryKey(runtimeType);
+  }
+
   Entity withDriver(DriverContract driver) {
     _driver = driver;
     return this;
   }
 
-  Entity withTableName(String name) {
-    _tableName = name;
-    return this;
-  }
+  Query<Model> get query => DB.query<Model>().driver(_driver);
 
-  Query<Model> get _query => DB.query<Model>(tableName).driver(_driver);
-
-  WhereClause<Model> _whereId(Query<Model> _) => _.whereEqual(primaryKey, id);
+  WhereClause<Model> _whereId(Query<Model> _) => _.whereEqual(_primaryKey, id);
 
   @nonVirtual
-  Future<void> delete() => _query.delete(_whereId).exec();
+  Future<void> delete() => query.delete(_whereId).exec();
 
   @nonVirtual
   Future<Model> save() async {
@@ -60,7 +76,7 @@ abstract class Entity<PkType, Model> {
       createdAt ??= now;
       updatedAt ??= now;
     }
-    final recordId = await _query.insert<PkType>(to_db_data);
+    final recordId = await query.insert<PkType>(to_db_data);
     return (this..id = recordId) as Model;
   }
 
@@ -71,44 +87,22 @@ abstract class Entity<PkType, Model> {
       values[updatedAtColumn] = DateTime.now().toUtc().toIso8601String();
     }
 
-    await _query.update(where: _whereId, values: values).exec();
-    return _query.get();
+    await query.update(where: _whereId, values: values).exec();
+    return query.get();
   }
 
   bool get enableTimestamps => false;
-
-  String? _tableName;
-  String get tableName {
-    if (_tableName != null) return _tableName!;
-    return _tableName = getTableName(runtimeType);
-  }
-
-  String get primaryKey => 'id';
 
   String get createdAtColumn => entityCreatedAtColumnName;
 
   String get updatedAtColumn => entityUpdatedAtColumnName;
 
   bool get allowInsertIdAsNull => false;
-
-  Map<String, dynamic> toJson();
-
-  @nonVirtual
-  // ignore: non_constant_identifier_names
-  Map<String, dynamic> get to_db_data {
-    final mapData = toJson();
-    if (mapData[primaryKey] == null && !allowInsertIdAsNull) mapData.remove(primaryKey);
-    if (!enableTimestamps) {
-      mapData
-        ..remove(createdAtColumn)
-        ..remove(updatedAtColumn);
-    }
-    return mapData;
-  }
 }
 
 @Target({TargetKind.classType})
 class EntityMeta {
   final String table;
-  const EntityMeta({required this.table});
+  final String primaryKey;
+  const EntityMeta({required this.table, this.primaryKey = 'id'});
 }

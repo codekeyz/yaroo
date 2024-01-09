@@ -52,7 +52,7 @@ class QueryImpl<Result> extends Query<Result> {
 
   @override
   Future<Result?> get([dynamic id]) async {
-    if (id != null) return whereEqual('id', id).findOne();
+    if (id != null) return whereEqual(getEntityPrimaryKey(Result), id).findOne();
     return (await take(1)).firstOrNull;
   }
 
