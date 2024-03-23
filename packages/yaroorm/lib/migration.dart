@@ -7,20 +7,7 @@ import 'package:yaroorm/yaroorm.dart';
 abstract class TableBlueprint {
   void id({String name = 'id', String? type, bool autoIncrement = true});
 
-  void foreign<Model extends Entity, ReferenceModel extends Entity>({
-    String? column,
-    ForeignKey Function(ForeignKey fkey)? onKey,
-  }) {
-    final table = getEntityTableName(Model);
-    final colName = column ?? '${ReferenceModel.toString().camelCase}Id';
-
-    final referenceTable = getEntityTableName(ReferenceModel);
-    final referenceTablePrimaryKey = getEntityPrimaryKey(ReferenceModel);
-    final fkey = ForeignKey(table, colName,
-        foreignTable: referenceTable,
-        foreignTableColumn: referenceTablePrimaryKey);
-    onKey?.call(fkey);
-  }
+  void foreign(ForeignKey key);
 
   void string(String name, {bool nullable = false, String? defaultValue});
 
@@ -36,9 +23,10 @@ abstract class TableBlueprint {
 
   void blob(String name, {bool nullable = false, String? defaultValue});
 
-  void timestamps(
-      {String createdAt = entityCreatedAtColumnName,
-      String updatedAt = entityUpdatedAtColumnName});
+  void timestamps({
+    String createdAt = 'createdAt',
+    String updatedAt = 'updatedAt',
+  });
 
   /// NUMBER TYPES
   /// ----------------------------------------------------------------
@@ -171,19 +159,48 @@ abstract class TableBlueprint {
 
 typedef TableBluePrintFunc = TableBlueprint Function(TableBlueprint table);
 
-class Schema {
+abstract class Schema {
   final String tableName;
   final TableBluePrintFunc? _bluePrintFunc;
 
   Schema._(this.tableName, this._bluePrintFunc);
 
-  String toScript(TableBlueprint table) =>
-      _bluePrintFunc!.call(table).createScript(tableName);
+  String toScript(TableBlueprint table);
+
+  static CreateSchema fromEntity<T extends Entity>() {
+    final entity = Query.getEntity<T>();
+
+    make(TableBlueprint table, DBEntityField field) {
+      return switch (field.type) {
+        const (int) => table
+          ..integer(field.columnName, nullable: field.nullable),
+        const (double) || const (num) => table
+          ..double(field.columnName, nullable: field.nullable),
+        const (DateTime) => table
+          ..datetime(field.columnName, nullable: field.nullable),
+        _ => table..string(field.columnName, nullable: field.nullable),
+      };
+    }
+
+    return CreateSchema._(
+      entity.tableName,
+      (table) {
+        table.id(name: entity.primaryKey.columnName);
+        for (final prop in entity.columns.where((e) => !e.primaryKey)) {
+          make(table, prop);
+        }
+        return table;
+      },
+    );
+  }
 
   static Schema create(String name, TableBluePrintFunc func) =>
-      Schema._(name, func);
+      CreateSchema._(name, func);
 
-  static Schema dropIfExists(String name) => _DropSchema(name);
+  static Schema dropIfExists(dynamic value) {
+    // if (value is! String) value = getEntityTableName(value);
+    return _DropSchema(value);
+  }
 
   static Schema rename(String from, String to) => _RenameSchema(from, to);
 }
@@ -198,6 +215,42 @@ abstract class Migration {
   void up(List<Schema> schemas);
 
   void down(List<Schema> schemas);
+}
+
+final class CreateSchema extends Schema {
+  final List<ForeignKey> _foreignKeys;
+
+  CreateSchema._(super.name, super.func)
+      : _foreignKeys = [],
+        super._();
+
+  @override
+  String toScript(TableBlueprint table) {
+    table = _bluePrintFunc!.call(table);
+    for (final key in _foreignKeys) {
+      table.foreign(key);
+    }
+    return table.createScript(tableName);
+  }
+
+  void foreign<ReferenceModel extends Entity>({
+    String? column,
+    ForeignKey Function(ForeignKey fkey)? onKey,
+  }) {
+    final referenceColumn =
+        column ?? '${ReferenceModel.toString().camelCase}Id';
+
+    final referenceTable = getEntityTableName<ReferenceModel>();
+    final referenceTablePrimaryKey = getEntityPrimaryKey<ReferenceModel>();
+    final fkey = ForeignKey(
+      tableName,
+      referenceColumn,
+      foreignTable: referenceTable,
+      foreignTableColumn: referenceTablePrimaryKey,
+    );
+    onKey?.call(fkey);
+    _foreignKeys.add(fkey);
+  }
 }
 
 class _DropSchema extends Schema {
@@ -244,22 +297,30 @@ class ForeignKey {
     this.constraint,
   });
 
-  ForeignKey actions(
-          {ForeignKeyAction? onUpdate, ForeignKeyAction? onDelete}) =>
-      ForeignKey(table, column,
-          foreignTable: foreignTable,
-          foreignTableColumn: foreignTableColumn,
-          nullable: nullable,
-          constraint: constraint,
-          onUpdate: onUpdate ?? this.onUpdate,
-          onDelete: onDelete ?? this.onDelete);
+  ForeignKey actions({
+    ForeignKeyAction? onUpdate,
+    ForeignKeyAction? onDelete,
+  }) =>
+      ForeignKey(
+        table,
+        column,
+        foreignTable: foreignTable,
+        foreignTableColumn: foreignTableColumn,
+        nullable: nullable,
+        constraint: constraint,
+        onUpdate: onUpdate ?? this.onUpdate,
+        onDelete: onDelete ?? this.onDelete,
+      );
 
-  ForeignKey constrained({String? name}) => ForeignKey(table, column,
-      foreignTable: foreignTable,
-      foreignTableColumn: foreignTableColumn,
-      nullable: nullable,
-      onUpdate: onUpdate,
-      onDelete: onDelete,
-      constraint: name ??
-          'fk_${table}_${column}_to_${foreignTable}_$foreignTableColumn');
+  ForeignKey constrained({String? name}) => ForeignKey(
+        table,
+        column,
+        foreignTable: foreignTable,
+        foreignTableColumn: foreignTableColumn,
+        nullable: nullable,
+        onUpdate: onUpdate,
+        onDelete: onDelete,
+        constraint: name ??
+            'fk_${table}_${column}_to_${foreignTable}_$foreignTableColumn',
+      );
 }
